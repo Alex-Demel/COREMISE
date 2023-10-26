@@ -55,15 +55,15 @@ del stack.
 No se realizará brincos de una subrutina a otra por medio de instrucciones que no sean call.
 
 # Reporte
-Portada: Título, curso, profesor, integrantes, fecha
-Introducción: Descripción general del producto. 1 página
+Portada: Título, curso, profesor, integrantes, fecha  
+Introducción: Descripción general del producto. 1 página  
 Proceso de solución del problema: Cómo se realizó el análisis del problema, se determinaron las tareas, 
-qué tuvieron que buscar e investigar (con referencias). Entre las imágenes incluirá el 1 a 3 páginas
+qué tuvieron que buscar e investigar (con referencias). Entre las imágenes incluirá el 1 a 3 páginas  
 Distribución de tareas: Tabla mostrando las tareas que realizaron (investigaciones, pruebas, algoritmos, 
 creación de código, etc.) y los integrantes del equipo a que realizaron las mismas.
 
 Ejemplo:  
-Tarea Persona a cargo Comentarios
+Tarea  |  Persona a cargo  |  Comentarios  
 Crear subrutina que recibe un dígito decimal en 
 R5 y la posición del dígito en R6 y escribe 
 presenta el mismo en el despliegue.
