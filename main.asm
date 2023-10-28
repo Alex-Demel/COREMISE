@@ -25,10 +25,11 @@ pos4 	.equ	18     ; Alfanumerico A4 comienza en S36
 pos5	.equ	14     ; Alfanumerico A5 comienza en S28
 pos6 	.equ	7      ; Alfanumerico A6 comienza en S14
 
-;Definir high y low bytes para generar caracteres J, N, F
-;JNF           J    N    F
-jnfH	.byte 0x78,0x6C,0x8F
-jnfL	.byte 0x00,0x82,0x00
+;Definir high y low bytes para generar caracteres
+;char          0    1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16   17   18   19   20   21   22   23   24   25   26   27   26   29   30   31   32   33   34   35
+;              A    B    C    D    E    F    G    H    I    J    K    L    M    N    O    P    Q    R    S    T    U    V    W    X    Y    Z    0    1    2    3    4    5    6    7    8    9
+charH	.byte 0xEF,0xF1,0x9C,0xF0,0x9F,0x8E,0xBD,0x6F,0x90,0x78,0x0E,0x1C,0x6C,0x6C,0xFC,0xCF,0xFC,0xCF,0xB7,0x80,0x7C,0x0C,0x7C,0x00,0x00,0x90,0xFC,0x00,0xDB,0xF3,0x67,0xB7,0xBF,0xE0,0xFF,0xE7
+charL	.byte 0x00,0x50,0x00,0x50,0x00,0x00,0x00,0x00,0x50,0x00,0x22,0x00,0xA0,0x82,0x00,0x00,0x02,0x02,0x00,0x50,0x00,0x28,0x10,0xAA,0xB0,0x28,0x28,0x50,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
 
 RESET       mov.w   #__STACK_END,SP         ; Inicializar stackpointer
 StopWDT     mov.w   #WDTPW|WDTHOLD,&WDTCTL  ; Parar watchdog timer
@@ -37,7 +38,7 @@ StopWDT     mov.w   #WDTPW|WDTHOLD,&WDTCTL  ; Parar watchdog timer
 ;-------------------------------------------------------------------------------
 ; Main loop here
 ;-------------------------------------------------------------------------------
-			
+
 			; Equipo 03
 			; Alex Demel
 			; % de contribución
@@ -76,21 +77,36 @@ UnlockGPIO  bic.w   #LOCKLPM5,&PM5CTL0      ; Desactivar el modo de alta impedan
 			;Encender LCD
 			BIS.W   #1,&LCDCCTL0
 
-			;Escribir JNF en los caracteres alfanuméricos A1-A3 de la pantalla
+			;Escribir TEAM03 en la pantalla
 			MOV.B   #pos1,R14
-			MOV.B	#0,R5
-  			MOV.B   jnfH(R5),0x0a20(R14)
-	        MOV.B   jnfL(R5),0x0a20+1(R14)
+			MOV.W	#19,R5
+  			MOV.B   charH(R5),0x0a20(R14)
+	        MOV.B   charL(R5),0x0a20+1(R14)
 
 			MOV.B   #pos2,R14
-			MOV.B	#1,R5
-			MOV.B   jnfH(R5),0x0a20(R14)
-	        MOV.B   jnfL(R5),0x0a20+1(R14)
+			MOV.W	#4,R5
+			MOV.B   charH(R5),0x0a20(R14)
+	        MOV.B   charL(R5),0x0a20+1(R14)
 
 			MOV.B   #pos3,R14
-			MOV.B	#2,R5
-			MOV.B   jnfH(R5),0x0a20(R14)
-	        MOV.B   jnfL(R5),0x0a20+1(R14)
+			MOV.W	#0,R5
+			MOV.B   charH(R5),0x0a20(R14)
+	        MOV.B   charL(R5),0x0a20+1(R14)
+
+	        MOV.B   #pos4,R14
+			MOV.W	#12,R5
+			MOV.B   charH(R5),0x0a20(R14)
+	        MOV.B   charL(R5),0x0a20+1(R14)
+
+	        MOV.B   #pos5,R14
+			MOV.W	#26,R5
+			MOV.B   charH(R5),0x0a20(R14)
+	        MOV.B   charL(R5),0x0a20+1(R14)
+
+	        MOV.B   #pos6,R14
+			MOV.W	#29,R5
+			MOV.B   charH(R5),0x0a20(R14)
+	        MOV.B   charL(R5),0x0a20+1(R14)
 
 	        JMP		$
 			nop
