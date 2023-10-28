@@ -77,11 +77,27 @@ UnlockGPIO  bic.w   #LOCKLPM5,&PM5CTL0      ; Desactivar el modo de alta impedan
 			;Encender LCD
 			BIS.W   #1,&LCDCCTL0
 
-			;Escribir TEAM03 en la pantalla
-			MOV.B   #pos1,R14
-			MOV.W	#19,R5
-  			MOV.B   charH(R5),0x0a20(R14)
-	        MOV.B   charL(R5),0x0a20+1(R14)
+			CALL	#Team03
+
+	        JMP		$
+			nop
+
+;Team03
+;Objetivo: Escribir TEAM03 en la pantalla
+;Precondiciones: El arreglo charH, charL, debe estar definido y el LCD debe estar activado
+;Postcondiciones: La pantalla mostrará el texto 'TEAM03'
+;Autor: Alex Demel
+;Fecha: 10/28/2023
+Team03:
+
+			PUSH	R5							;Guardar el contenido de R5 para evitar efectos secundarios
+			PUSH	R14							;Guardar el contenido de R14 para evitar efectos secundarios
+
+			MOV.B   #pos1,R14					;Colocar la posición del primer caracter en R14
+			MOV.W	#19,R5						;Colocar el índice del caracter a dibujar en R5
+
+  			MOV.B   charH(R5),0x0a20(R14)		;Accesar los segmentos (high/low) guardados en el índice de R5 y
+  			MOV.B   charL(R5),0x0a20+1(R14)		;dibujar en la posición dada por R14+0x0a20/R14+0x0a20+1
 
 			MOV.B   #pos2,R14
 			MOV.W	#4,R5
@@ -108,8 +124,10 @@ UnlockGPIO  bic.w   #LOCKLPM5,&PM5CTL0      ; Desactivar el modo de alta impedan
 			MOV.B   charH(R5),0x0a20(R14)
 	        MOV.B   charL(R5),0x0a20+1(R14)
 
-	        JMP		$
-			nop
+	        POP		R14							;Recuperar el contenido de R14
+	        POP		R5							;Recuperar el contenido de R5
+
+	        RET
 
 ;NombreDeSubrutina (Ejemplo)
 ;Objetivo:
