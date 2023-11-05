@@ -33,10 +33,10 @@ numH	.byte 0xFC,0x00,0xDB,0xF3,0x67,0xB7,0xBF,0xE0,0xFF,0xE7
 numL	.byte 0x28,0x50,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
 
 ;Definir los índices del string 'Team 03'
-team		.word	0,0,0,0,0,20,5,1,13,0,27,28,0,0,0,0,0,-1
+team		.word	0,0,0,0,0,20,5,1,13,0,27,28,0,0,0,0,0,0,-1
 
 ;Definir los índices del string 'Alex Demel'
-alex		.word	0,0,0,0,0,1,12,5,24,0,4,5,13,5,12,0,0,0,0,0,-1
+alex		.word	0,0,0,0,0,1,12,5,24,0,4,5,13,5,12,0,0,0,0,0,0,-1
 
 RESET       mov.w   #__STACK_END,SP         ; Inicializar stackpointer
 StopWDT     mov.w   #WDTPW|WDTHOLD,&WDTCTL  ; Parar watchdog timer
@@ -67,12 +67,60 @@ StopWDT     mov.w   #WDTPW|WDTHOLD,&WDTCTL  ; Parar watchdog timer
 			nop
 
 ;-------------------------------------------------------------------------------
+;ScrollStr
+;Objetivo: Dibujar un string 'scrolling' en la pantalla
+;Precondiciones: La dirección del arreglo conteniendo el string debe estar dada en R8
+;Postcondiciones: La pantalla mostrará el string dado por R8 'scrolling'
+;Autor: Alex Demel
+;Fecha: 11/2/2023
+;-------------------------------------------------------------------------------
+ScrollStr:
+			PUSH	R4								;Guardar el contenido de R4
+			PUSH	R5								;Guardar el contenido de R5
+			PUSH	R6								;Guardar el contenido de R6
+			PUSH	R7								;Guardar el contenido de R7
+			PUSH	R9								;Guardar el contenido de R9
+
+restart:	MOV.B   #0,R6							;Usar R6 como índice de comienzo
+			MOV.B   #0,R9							;Usar R9 como contador
+
+first:		MOV.B   R6,R7							;Guardar R6 (ídice de comienzo) en R7 (índice general)
+
+			MOV.W	#62500,R4						;Establecer los ciclos a esperar
+			CALL	#Delay							;Antes de volver a dibujar en la pantalla
+
+next:		MOV.B   pos(R9),R4						;Guardar la pocisión del caracter en R4
+			MOV.W	R8,R5							;Guardar la dirección del arreglo en R5
+			ADD.W	R7,R5							;Sumar el índice a R5
+			MOV.W	@R5,R5							;Colocar el caracter apuntado por R5 en R5
+			CALL	#DrawChar
+
+			INCD.B	R9								;Incrementar contador
+			INCD.B	R7								;Incrementar el índice general
+
+	        CMP		#-1,R5							;Verificar si llegamos al último caracter
+			JZ		restart							;Regresar al inicio
+			CMP		#14,R9							;Verificar si llegamos a la última posición
+			JNZ		next							;Si no hemos llegado, continúa
+	        MOV.B   #0,R9							;Si llegamos al final, regresa a cero
+	        INCD.W	R6								;Incrementar R6 (ídice de comienzo)
+			JMP		first
+
+			POP		R9								;Recuperar el contenido de R9
+	        POP		R7								;Recuperar el contenido de R7
+	        POP		R6								;Recuperar el contenido de R6
+	        POP		R5								;Recuperar el contenido de R5
+	        POP		R4								;Recuperar el contenido de R4
+
+			RET
+
+;-------------------------------------------------------------------------------
 ;DrawChar
-;Objetivo: Dibujar un caracter en la pantalla en la posición dada
-;Precondiciones: La posición del caracter debe estar dada
-;en R4 y el índice del caracter debe estar dado en R5.
-;Postcondiciones: La pantalla mostrará el caracter
-;dado por R5 en la posición dada por R4.
+;Objetivo: Dibujar un caracter en la pantalla en la posición dada por R4
+;Precondiciones: La posición del caracter debe estar dada en R4 y el índice
+;del caracter debe estar dado en R5.
+;Postcondiciones: La pantalla mostrará el caracter dado por R5 en la posición
+;dada por R4.
 ;Autor: Alex Demel
 ;Fecha: 11/2/2023
 ;-------------------------------------------------------------------------------
@@ -84,56 +132,43 @@ DrawChar:
   			RET
 
 ;-------------------------------------------------------------------------------
-;ScrollStr
-;Objetivo: Dibujar un string 'scrolling' en la pantalla
-;Precondiciones: La dirección del arreglo conteniendo el string debe estar dada en R8
-;Postcondiciones: La pantalla mostrará el string dado por R8 'scrolling'
+;DrawNum
+;Objetivo: Dibujar un número en la pantalla en la posición dada por R4
+;Precondiciones: La posición del número debe estar dada en R4 y el índice
+;del número debe estar dado en R5.
+;Postcondiciones: La pantalla mostrará el número dado por R5 en la posición
+;dada por R4.
 ;Autor: Alex Demel
 ;Fecha: 11/2/2023
 ;-------------------------------------------------------------------------------
-ScrollStr:
-			PUSH	R4							;Guardar el contenido de R4
-			PUSH	R5							;Guardar el contenido de R5
-			PUSH	R6							;Guardar el contenido de R6
-			PUSH	R7							;Guardar el contenido de R7
-			PUSH	R9							;Guardar el contenido de R9
+DrawNum:
+  			MOV.B   numH(R5),0x0a20(R4)			;Accesar los segmentos (high/low)
+  												;guardados en el índice de R5 y
+  			MOV.B   numL(R5),0x0a20+1(R4)		;dibujar en la posición dada por
+  												;R4+0x0a20 y R4+0x0a20+1
+  			RET
 
-restart:	MOV.B   #0,R6						;Usar R6 como índice de comienzo
-			MOV.B   #0,R9						;Usar R9 como contador
-
-first:		CALL	#delay						;Esperar antes de reescribir la pantalla
-			MOV.B   R6,R7						;Guardar R6 (ídice de comienzo) en R7 (índice general)
-
-next:		MOV.B   pos(R9),R4					;Guardar la pocisión del caracter en R4
-			MOV.W	R8,R5						;Guardar la dirección del arreglo en R5
-			ADD.W	R7,R5						;Sumar el índice a R5
-			MOV.W	@R5,R5						;Colocar el caracter apuntado por R5 en R5
-			CALL	#DrawChar
-
-			INCD.B	R9							;Incrementar contador
-			INCD.B	R7							;Incrementar el índice general
-
-	        CMP		#-1,R5						;Verificar si llegamos al último caracter
-			JZ		restart						;Regresar al inicio
-			CMP		#14,R9						;Verificar si llegamos a la última posición
-			JNZ		next						;Si no hemos llegado, continúa
-	        MOV.B   #0,R9						;Si llegamos al final, regresa a cero
-	        INCD.W	R6							;Incrementar R6 (ídice de comienzo)
-			JMP		first
-
-			POP		R9							;Recuperar el contenido de R9
-	        POP		R7							;Recuperar el contenido de R7
-	        POP		R6							;Recuperar el contenido de R6
-	        POP		R5							;Recuperar el contenido de R5
-	        POP		R4							;Recuperar el contenido de R4
-
+;-------------------------------------------------------------------------------
+;Delay
+;Objetivo: Esperar x cantidad de ciclos antes de continuar el programa
+;Precondiciones: La cantidad de ciclos a esperar debe estar dada en R4
+;Postcondiciones: El programa esperará la cantidad de ciclos dados en R4 y continuará
+;Autor: Alex Demel
+;Fecha: 11/4/2023
+;-------------------------------------------------------------------------------
+Delay:
+			BIS    	#BIT4,TA0CTL			;Empezar el timer
+			BIC    	#BIT0,TA0CTL			;Darle clear al interrupt flag
+			MOV     R4,TA0CCR0       	 	;Establecer los ciclos de espera
+check:		BIT		#1,TA0CTL				;Chequear si el timer terminó (check interrupt)
+			JZ		check					;Si no ha terminado, chequear otra vez
 			RET
 
 ;-------------------------------------------------------------------------------
-;SetupLCD
-;Objetivo: Hacer la inicialización del display
+;Setup
+;Objetivo: Iniciar el display y habilitar interrupciones del timer
 ;Precondiciones: No hay precondiciones
-;Postcondiciones: El LCD estará inicializado
+;Postcondiciones: El LCD y Timer estarán inicializados
 ;Autor: Alex Demel
 ;Fecha: 11/2/2023
 ;-------------------------------------------------------------------------------
@@ -144,7 +179,8 @@ SetupLCD:
 			MOV.W   #0xfc3f,&LCDCPCTL1
   		    MOV.W   #0x0fff,&LCDCPCTL2
 
-UnlockGPIO  bic.w   #LOCKLPM5,&PM5CTL0      ; Desactivar el modo de alta impedancia
+UnlockGPIO:
+			bic.w   #LOCKLPM5,&PM5CTL0      ; Desactivar el modo de alta impedancia
 											; predeterminado de GPIO al encender para
 											; activar configuraciones de puerto
 											; previamente configuradas
@@ -166,27 +202,29 @@ UnlockGPIO  bic.w   #LOCKLPM5,&PM5CTL0      ; Desactivar el modo de alta impedan
 			;Encender LCD
 			BIS.W   #1,&LCDCCTL0
 
+			;----------------------------------------------------------------------
+			;								Timer
+
+			NOP
+			BIS     #GIE, SR	;Habilitar interrupciones
+			NOP
+
+    		;Cambiar fuente de reloj a SMLCK = 1 MHz  (#TASSEL_2)
+			;Cambiar modo a 'Stop'  (MC_0)
+			;Establecer divisor de input 4 (ID_2)
+
+			MOV		#CCIE, &TA0CCTL0        ;Habilitar interrupción TACCR0
+
+	        MOV     #TASSEL_2+MC_0+ID_2, &TA0CTL
+
+		    NOP
 			RET
 
 ;-------------------------------------------------------------------------------
-;delay
-;Objetivo: Que el programa espere un poco antes de continuar
-;Precondiciones: No hay precondiciones
-;Postcondiciones: El programa esperará un poco y continuará
-;Autor: Alex Demel
-;Fecha: 10/28/2023
-;-------------------------------------------------------------------------------
-delay:
-			PUSH	R4							;Guardar el contenido de R4
-
-			MOV.W	#0,R4						;Usar R4 como contador
-cuenta:		INC		R4							;Incrementar R4
-			CMP		#0xFFFF,R4					;Verificar si R4 llegó a su máximo
-			JLO		cuenta						;Si no ha llegado, continúa
-
-			POP		R4							;Recuperar el contenido de R4
-
-			RET
+TA0_ISR:
+	        BIC    	#BIT5+BIT4,TA0CTL  		;Parar el timer
+	        MOV		#CCIE, &TA0CCTL0        ;Rehabilitar interrupción TACCR0
+	        RETI
 
 ;-------------------------------------------------------------------------------
 ; Definición de stackpointer
@@ -199,3 +237,5 @@ cuenta:		INC		R4							;Incrementar R4
 ;-------------------------------------------------------------------------------
             .sect   ".reset"                ; Vector RESET del MSP430
             .short  RESET
+            .sect   ".int44"
+            .short  TA0_ISR
