@@ -28,6 +28,12 @@ s1Pressed	.word 	0
 ;Definir booleana para botón S2
 s2Pressed	.word 	0
 
+;Definir la longitud de medio segundo
+secLen		.word 	62500
+
+;Definir word para la velocidad del conteo
+speed		.word 	0
+
 ;Definir high y low bytes para generar caracteres
 ;char          0    1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16   17   18   19   20   21   22   23   24   25   26   27   28
 ;             ' '   A    B    C    D    E    F    G    H    I    J    K    L    M    N    O    P    Q    R    S    T    U    V    W    X    Y    Z    0    3
@@ -77,8 +83,10 @@ StopWDT     mov.w   #WDTPW|WDTHOLD,&WDTCTL  ; Parar watchdog timer
 			;Inicializar la aplicación
 			CALL	#Setup
 
-			;Establecer el estado 0
-			MOV		#0,R15
+			MOV		#0,R15							;Establecer el estado 0
+			MOV.W   #2,&LCDCMEMCTL       			;Borrar memoria LCD
+			MOV		#62500,secLen					;Recuperar la duración de 0.5s
+			MOV		#0,speed						;Darle clear a la velocidad de conteo
 
 ;Manejar los diferentes estados de la aplicación
 stateMachine:
@@ -104,8 +112,6 @@ stateMachine:
 			JMP 	stateMachine					;Verificar estados nuevamente
 
 zeroState:
-			MOV.W   #2,&LCDCMEMCTL       			;Borrar memoria LCD
-
 			MOV		#members,R4						;Guardar la ubicación de los miembros
 			CALL	#StartSub						;Llamar la subrutina que maneja el estado inicial
 			JMP		stateMachine					;Verificar estados nuevamente
@@ -119,6 +125,7 @@ secondState:
 			JMP		stateMachine					;Verificar estados nuevamente
 
 thirdState:
+			MOV     #TASSEL_2+MC_0+ID_3,&TA0CTL		;Establecer frecuencia base
 			CALL	#CounterSub						;Comenzar el conteo
 			JMP		stateMachine					;Verificar estados nuevamente
 
@@ -130,6 +137,15 @@ fourthState:
 fifthState:
 			CALL	#NumBlink						;Parpadear la pantalla
 			MOV.B	#0,R15							;Regresar al inicio (estado 0)
+
+			MOV.W   #2,&LCDCMEMCTL       			;Borrar memoria LCD
+			MOV     #TASSEL_2+MC_0+ID_3,&TA0CTL		;Establecer frecuencia base
+			MOV		#0,speed						;Darle clear a la velocidad de conteo
+			MOV		#62500,secLen					;Recuperar la duración de 0.5s
+
+			MOV.W	#6250,R4						;Establecer los ciclos a esperar
+			CALL	#Delay
+
 			JMP		stateMachine					;Verificar estados nuevamente
 
 	        JMP		$
@@ -147,6 +163,8 @@ CounterSub:
 
 			BIS.B   #0x04,&0x0A33					;Dibujar ':' antes de todos los números
 			CALL	#OneSecond						;Esperar 1s y continuar
+
+			CALL	#CountSpeed
 
 			CALL	#CheckEnd						;Verificar si el conteo terminó
 			CMP.B	#5,R15
@@ -197,6 +215,49 @@ timeEnd:
 			RET
 
 ;-------------------------------------------------------------------------------
+;CountSpeed
+;Objetivo: Verificar si se oprimió S1 e incrementar la velocidad de conteo
+;Precondiciones: El word que contiene la velocidad debe estar definido
+;Postcondiciones: Se incrementará la velocidad de conteo si se cumplen las condiciones
+;Autor: Alex Demel
+;Fecha: 11/8/2023
+;-------------------------------------------------------------------------------
+CountSpeed:
+
+			CMP		#1,s1Pressed					;Verificar si se oprimió s1
+			JNZ		endSpeed						;Si no es el caso, continuar igual
+			MOV.B   #0,s1Pressed					;Si es el caso, poner booleana falsa
+			ADD		#1,speed						;Aumentar velocidad
+
+speed1:
+			CMP		#1,speed						;Verificar velocidad 1
+			JNZ		speed2							;De no ser el caso, verificar prox.
+			MOV     #TASSEL_2+MC_0+ID_2,&TA0CTL		;De ser el caso, ajustar Input Divider
+			JMP		endSpeed						;Terminar
+
+speed2:
+			CMP		#2,speed						;Verificar velocidad 2
+			JNZ		speed3							;De no ser el caso, verificar prox.
+			MOV     #TASSEL_2+MC_0+ID_1,&TA0CTL		;De ser el caso, ajustar Input Divider
+			JMP		endSpeed						;Terminar
+
+speed3:
+			CMP		#3,speed						;Verificar velocidad 3
+			JNZ		speed4							;De no ser el caso, verificar prox.
+			MOV     #TASSEL_2+MC_0+ID_0,&TA0CTL		;De ser el caso, ajustar Input Dividerider
+			JMP		endSpeed						;Terminar
+speed4:
+			CMP		#1,secLen						;Verificar si podemos decrementar la duración
+			JEQ		endSpeed						;Si la duración es 1, no decrementamos
+
+			RRA		secLen							;Dividir la duración de 0.5s a la mitad
+			BIC		#0x8000,secLen					;Darle clear al MSB de la duración
+			JMP		endSpeed						;Terminar
+
+endSpeed:
+			RET
+
+;-------------------------------------------------------------------------------
 ;ReadyCheck
 ;Objetivo: Verificar si se oprimió S2 e incrementar el estado a 3
 ;Precondiciones: Debemos estar en el estado 2 (R15 debe contener #2)
@@ -221,6 +282,8 @@ ReadyCheck:
 ;Fecha: 11/8/2023
 ;-------------------------------------------------------------------------------
 NumBlink:
+
+			MOV     #TASSEL_2+MC_0+ID_3,&TA0CTL		;Establecer frecuencia base
 
 			MOV.B   #3,R4							;Guardar la pocisión de minuteHigh
 			MOV.W	#10,R5							;Darle clear a minuteHigh (Blinking)
@@ -391,7 +454,7 @@ NumSelect:
 			MOV.W	#0,R5							;Mover cero a R5 (comenzar en cero)
 
 nextNum:
-			MOV.W	#12500,R4						;Establecer los ciclos a esperar
+			MOV.W	#6250,R4						;Establecer los ciclos a esperar
 			CALL	#Delay
 
 			MOV.B   pos(R6),R4						;Guardar la pocisión del número en R4
@@ -419,15 +482,18 @@ noInc:
 			CMP		#1,s2Pressed					;Verificar si se oprimió s2
 	        JNZ		noInc2							;Si no se oprimió continuar
 			INCD.B	R6								;Si se oprimió incrementa el índice
+			MOV.B   #0,s2Pressed					;Booleana es falsa
+
 			CALL	#StoreNum						;Graba el número que dibujamos
 			MOV.W	#0,R7							;Mover cero a R7 (comenzar en cero)
 			MOV.W	#0,R5							;Mover cero a R5 (comenzar en cero)
-			MOV.B   #0,s2Pressed					;Booleana es falsa
 noInc2:
+			MOV.W	#6250,R4						;Establecer los ciclos a esperar
+			CALL	#Delay
+
 			CMP		#12,R6							;Verificar si llegamos a la última posición
 			JNZ		nextNum							;Si no es el caso, continuar
-
-			MOV		#2,R15							;Establecer el estado 2
+			MOV		#2,R15							;Si es el caso, establecer el estado 2
 
 			POP		R7								;Recuperar el contenido de R7
 			POP		R6								;Recuperar el contenido de R6
@@ -673,12 +739,25 @@ DrawNum:
 ;Fecha: 11/7/2023
 ;-------------------------------------------------------------------------------
 OneSecond:
+			CMP		#14,speed				;Verificar si la velocidad > 15
+			JHS		instant					;Si es el caso, terminar
+
 			BIS    	#BIT4,TA0CTL			;Empezar el timer
-			MOV     #62500,TA0CCR0       	;Esperar 0.5s
-			BIS		#CPUOFF, SR				;Entrar a low power
+			MOV     secLen,TA0CCR0       	;Esperar 0.5s
+
+			CMP		#14,speed				;Verificar si la velocidad > 15
+			JEQ		instant					;Si es el caso, terminar
+
+			BIS		#CPUOFF, SR				;De lo contrario, entrar a low power
+
 			BIS    	#BIT4,TA0CTL			;Empezar el timer
-			MOV     #62500,TA0CCR0       	;Esperar 0.5s
-			BIS		#CPUOFF, SR				;Entrar a low power
+			MOV     secLen,TA0CCR0       	;Esperar 0.5s
+
+			CMP		#14,speed				;Verificar si la velocidad > 15
+			JEQ		instant					;Si es el caso, terminar
+
+			BIS		#CPUOFF, SR				;De lo contrario, entrar a low power
+instant:
 			RET
 
 ;-------------------------------------------------------------------------------
@@ -782,14 +861,25 @@ TA0_ISR:
 
 ;-------------------------------------------------------------------------------
 PORT1_ISR:
-            BIT.B   #00000010b, &P1IFG      ;Verificar P1.1
+	    	BIT.B   #00000010b, &P1IFG      ;Verificar P1.1
             JNZ		s1Press
 
             BIT.B   #00000100b, &P1IFG      ;Verificar P1.2
             JNZ		s2Press
 
 s1Press:
-			MOV.B	#1,s1Pressed			;Booleana es cierta
+			CMP		#2,R15					;Verificar si estamos en el estado 2
+			JEQ		end2					;Si estamos en el estado 2, terminar
+
+			CMP		#4,R15					;Verificar si estamos en el estado 4
+			JEQ		end2					;Si estamos en el estado 4, terminar
+
+			MOV.B	#1,s1Pressed			;De lo contrario, booleana es cierta
+
+			CMP		#14,speed				;Verificar si la velocidad < 14
+			JLO		end2					;Si es el caso, terminar
+			BIC		#0x10, 0(SP)			;Si no es el caso, salir de low power
+
 			JMP 	end2
 s2Press:
 			CMP		#0,R15					;Verificar si estamos en el estado 0
