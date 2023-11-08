@@ -95,9 +95,17 @@ stateMachine:
 			CMP		#3,R15							;Verificar si estamos en el estado 3
 			JEQ		thirdState						;Ir al tercer estado
 
+			CMP		#4,R15							;Verificar si estamos en el estado 4
+			JEQ		fourthState						;Ir al cuarto estado
+
+			CMP		#5,R15							;Verificar si estamos en el estado 5
+			JEQ		fifthState						;Ir al quinto estado
+
 			JMP 	stateMachine					;Verificar estados nuevamente
 
 zeroState:
+			MOV.W   #2,&LCDCMEMCTL       			;Borrar memoria LCD
+
 			MOV		#members,R4						;Guardar la ubicación de los miembros
 			CALL	#StartSub						;Llamar la subrutina que maneja el estado inicial
 			JMP		stateMachine					;Verificar estados nuevamente
@@ -114,6 +122,16 @@ thirdState:
 			CALL	#CounterSub						;Comenzar el conteo
 			JMP		stateMachine					;Verificar estados nuevamente
 
+fourthState:
+			CALL	#NumBlink						;Parpadear la pantalla
+			MOV.B	#3,R15							;Regresar al conteo (estado 3)
+			JMP		stateMachine					;Verificar estados nuevamente
+
+fifthState:
+			CALL	#NumBlink						;Parpadear la pantalla
+			MOV.B	#0,R15							;Regresar al inicio (estado 0)
+			JMP		stateMachine					;Verificar estados nuevamente
+
 	        JMP		$
 			nop
 
@@ -127,21 +145,26 @@ thirdState:
 ;-------------------------------------------------------------------------------
 CounterSub:
 
-strt:		CALL	#OneSecond						;Esperar 1s y continuar
+			BIS.B   #0x04,&0x0A33					;Dibujar ':' antes de todos los números
+			CALL	#OneSecond						;Esperar 1s y continuar
 
 			CALL	#CheckEnd						;Verificar si el conteo terminó
-			CMP.B	#0,R15
+			CMP.B	#5,R15
 			JZ		timeEnd
 
-			CMP.B	#0,R14							;Verificar si secondLow es cero
+			CMP		#1,s2Pressed					;Verificar si se oprimió s2
+			JNZ		endPause						;Si no es el caso, continuar sin pausa
+			MOV.B 	#4,R15							;Si es el caso, establecer estado 4 (pausa)
+			JZ		timeEnd
+
+endPause:	CMP.B	#0,R14							;Verificar si secondLow es cero
 			JNZ		secLo							;De no ser el caso, manejar secLo
 			MOV.B	#10,R14							;De ser el caso, colocar 10 en secLo
 			CALL	#DecSecondLow					;E inmediatamente decrementar a 9
 			JMP		secHiChk						;Chequear si podemos decrementar secHi
 
-secLo:
-			CALL	#DecSecondLow					;Decrementar secondLow
-			JMP		strt							;Volver al comienzo
+secLo:		CALL	#DecSecondLow					;Decrementar secondLow
+			JMP		CounterSub						;Volver al comienzo
 
 secHiChk:	CMP.B	#0,R13							;Verificar si secondHigh es cero
 			JNZ		secHi							;De no ser el caso, manejar secHi
@@ -150,7 +173,7 @@ secHiChk:	CMP.B	#0,R13							;Verificar si secondHigh es cero
 			JMP		minLoChk						;Chequear si podemos decrementar minLo
 
 secHi:		CALL	#DecSecondHigh
-			JMP		strt							;Volver al comienzo
+			JMP		CounterSub						;Volver al comienzo
 
 minLoChk:	CMP.B	#0,R12							;Verificar si minuteLow es cero
 			JNZ		minLo							;De no ser el caso, manejar minLo
@@ -159,14 +182,14 @@ minLoChk:	CMP.B	#0,R12							;Verificar si minuteLow es cero
 			JMP		minHiChk						;Chequear si podemos decrementar minHi
 
 minLo:		CALL	#DecMinuteLow
-			JMP		strt							;Volver al comienzo
+			JMP		CounterSub						;Volver al comienzo
 
 minHiChk:	CMP.B	#0,R11							;Verificar si minuteHigh es cero
 			JNZ		minHi							;De no ser el caso, manejar minHi
-			JMP		strt							;De ser el caso, volver al comienzo
+			JMP		CounterSub						;De ser el caso, volver al comienzo
 
 minHi:		CALL	#DecMinuteHigh
-			JMP		strt							;Volver al comienzo
+			JMP		CounterSub						;Volver al comienzo
 
 timeEnd:
 			MOV.B   #0,s1Pressed					;Booleana es falsa
@@ -190,11 +213,75 @@ ReadyCheck:
 			RET
 
 ;-------------------------------------------------------------------------------
+;NumBlink
+;Objetivo: Hacer 'Blinking' en los números que estan mostrados en la pantalla
+;Precondiciones: Los registros R11-14 deben estar definidos y contener MM:SS respectivamente
+;Postcondiciones: los números que estan mostrados en la pantalla harán 'Blinking'
+;Autor: Alex Demel
+;Fecha: 11/8/2023
+;-------------------------------------------------------------------------------
+NumBlink:
+
+			MOV.B   #3,R4							;Guardar la pocisión de minuteHigh
+			MOV.W	#10,R5							;Darle clear a minuteHigh (Blinking)
+			CALL	#DrawNum						;Dibujar en la posición de minuteHigh
+
+			MOV.B   #18,R4							;Guardar la pocisión de minuteLow
+			MOV.W	#10,R5							;Darle clear a minuteLow (Blinking)
+			CALL	#DrawNum						;Dibujar en la posición de minuteLow
+
+			MOV.B   #14,R4							;Guardar la pocisión de secondHigh
+			MOV.W	#10,R5							;Darle clear a secondHigh (Blinking)
+			CALL	#DrawNum						;Dibujar en la posición de secondHigh
+
+			MOV.B   #7,R4							;Guardar la pocisión de secondLow
+			MOV.W	#10,R5							;Darle clear a secondLow (Blinking)
+			CALL	#DrawNum						;Dibujar en la posición de secondLow
+
+			MOV.W	#12500,R4						;Establecer los ciclos a esperar
+			CALL	#Delay
+
+draw:		MOV.B   #3,R4							;Guardar la pocisión de minuteHigh
+			MOV.W	R11,R5							;Guardar el valor de minuteHigh en R5
+			CALL	#DrawNum						;Dibujar en la posición de minuteHigh
+
+			MOV.B   #18,R4							;Guardar la pocisión de minuteLow
+			MOV.W	R12,R5							;Guardar el valor de minuteLow en R5
+			CALL	#DrawNum						;Dibujar en la posición de minuteLow
+
+			MOV.B   #14,R4							;Guardar la pocisión de secondHigh
+			MOV.W	R13,R5							;Guardar el valor de secondHigh en R5
+			CALL	#DrawNum						;Dibujar en la posición de secondHigh
+
+			MOV.B   #7,R4							;Guardar la pocisión de secondLow
+			MOV.W	R14,R5							;Guardar el valor de secondLow en R5
+			CALL	#DrawNum						;Dibujar en la posición de secondLow
+
+			MOV.W	#12500,R4						;Establecer los ciclos a esperar
+			CALL	#Delay
+
+			CMP.B	#4,R15							;Verificar si estamos en pausa
+			JNZ		nxtChk							;De no ser el caso, verificar prox. estado
+			CMP		#1,s2Pressed					;De ser el caso, verificar si se oprimió s2
+			JNZ		NumBlink						;Si no es el caso, volver al inicio
+			MOV.B	#0,s2Pressed					;Si es el caso, poner booleana falsa
+			JMP		blinkEnd
+
+nxtChk:		CMP.B	#5,R15
+			JNZ		NumBlink						;De no ser el caso, volver al inicio
+			CMP		#1,s1Pressed					;Verificar si se oprimió s1
+			JNZ		NumBlink						;Si no es el caso, volver al inicio
+			MOV.B	#0,s1Pressed					;Si es el caso, poner booleana falsa
+
+blinkEnd:
+			RET
+
+;-------------------------------------------------------------------------------
 ;CheckEnd
 ;Objetivo: Verificar si llegamos al final del conteo
 ;Precondiciones: Los registros R11-14 deben estar definidos y contener MM:SS respectivamente
 ;Postcondiciones: Se mostrará 00:00 en la pantalla hasta que se presione S1.
-;Si S1 es presionado, estableceremos el estado inicial 0 en R15
+;Si S1 es presionado, estableceremos el estado estado 5 (finished)
 ;Autor: Alex Demel
 ;Fecha: 11/7/2023
 ;-------------------------------------------------------------------------------
@@ -209,12 +296,7 @@ CheckEnd:
 			JNZ		ignore
 
 			CALL	#NumBase						;Dibujar 00:00 en la pantalla
-			MOV		#4,R15							;Establecer el estado 4
-
-			BIS		#CPUOFF, SR						;Entrar a low power (despertará con S1)
-			MOV.B   #0,s1Pressed					;Booleana es falsa
-
-			MOV		#0,R15							;Establecer el estado 0
+			MOV		#5,R15							;Establecer el estado 5
 
 ignore:
 			RET
@@ -265,7 +347,6 @@ DecSecondHigh:
 			DEC.B	R13								;Decrementar R13 (secondHigh)
 			MOV.W	R13,R5							;Guardar el valor decrementado en R5
 			CALL	#DrawNum						;Dibujar en la posición de secondHigh
-			BIS.B   #0x04,&0x0A33					;Dibujar ':'
 			RET
 
 ;-------------------------------------------------------------------------------
@@ -282,6 +363,7 @@ DecSecondLow:
 			DEC.B	R14								;Decrementar R14 (secondLow)
 			MOV.W	R14,R5							;Guardar el valor decrementado en R5
 			CALL	#DrawNum						;Dibujar en la posición de secondLow
+			BIS.B   #0x04,&0x0A33					;Dibujar ':'
 			RET
 
 ;-------------------------------------------------------------------------------
@@ -708,21 +790,18 @@ PORT1_ISR:
 
 s1Press:
 			MOV.B	#1,s1Pressed			;Booleana es cierta
-			CMP		#4,R15					;Verificar si estamos en el estado 4
-			JNZ		end2					;Si no es el caso, terminar
-			BIC		#0x10, 0(SP)			;Si es el caso, salir de low power
-
 			JMP 	end2
 s2Press:
 			CMP		#0,R15					;Verificar si estamos en el estado 0
 			JEQ		end2					;Si estamos en el estado 0, terminar
+			CMP		#5,R15					;Verificar si estamos en el estado 5
+			JEQ		end2					;Si estamos en el estado 5, terminar
 			MOV.B	#1,s2Pressed			;De lo contario, poner booleana cierta
 
 			CMP		#2,R15					;Verificar si estamos en el estado 2
-			JNZ		end2					;Si no es el caso, terminar
+			JNZ		end2					;De no ser el caso, terminar
 			BIC		#0x10, 0(SP)			;Si es el caso, salir de low power
 
-			JMP 	end2
 end2:
 			BIC 	#00000010b, &P1IFG		;Borrar flag de P1.1
 			BIC	    #00000100b, &P1IFG		;Borrar flag de P1.2
