@@ -35,9 +35,9 @@ charH	.byte 0x00,0xEF,0xF1,0x9C,0xF0,0x9F,0x8E,0xBD,0x6F,0x90,0x78,0x0E,0x1C,0x6
 charL	.byte 0x00,0x00,0x50,0x00,0x50,0x00,0x00,0x00,0x00,0x50,0x00,0x22,0x00,0xA0,0x82,0x00,0x00,0x02,0x02,0x00,0x50,0x00,0x28,0x10,0xAA,0xB0,0x28,0x28,0x00
 
 ;Definir high y low bytes para generar números
-;num           0    1    2    3    4    5    6    7    8    9
-numH	.byte 0xFC,0x00,0xDB,0xF3,0x67,0xB7,0xBF,0xE0,0xFF,0xE7
-numL	.byte 0x28,0x50,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+;num           0    1    2    3    4    5    6    7    8    9	' '
+numH	.byte 0xFC,0x00,0xDB,0xF3,0x67,0xB7,0xBF,0xE0,0xFF,0xE7,0x00
+numL	.byte 0x28,0x50,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
 
 ;Definir los índices del string 'Team 03'
 team		.word	0,0,0,0,0,20,5,1,13,0,27,28,0,0,0,0,0,0,0,-1
@@ -78,16 +78,22 @@ StopWDT     mov.w   #WDTPW|WDTHOLD,&WDTCTL  ; Parar watchdog timer
 			CALL	#Setup
 
 			;Establecer el estado 0
-			MOV		#0,R14
+			MOV		#0,R15
 
 ;Manejar los diferentes estados de la aplicación
 stateMachine:
 
-			CMP		#0,R14							;Verificar si estamos en el comienzo
-			JEQ		zeroState						;Ir al estado 0
+			CMP		#0,R15							;Verificar si estamos en el comienzo
+			JEQ		zeroState						;Ir al estado cero
 
-			CMP		#1,R14							;Verificar si estamos en el estado 1
+			CMP		#1,R15							;Verificar si estamos en el estado 1
 			JEQ		firstState						;Ir al primer estado
+
+			CMP		#2,R15							;Verificar si estamos en el estado 2
+			JEQ		secondState						;Ir al segundo estado
+
+			CMP		#3,R15							;Verificar si estamos en el estado 3
+			JEQ		thirdState						;Ir al tercer estado
 
 			JMP 	stateMachine					;Verificar estados nuevamente
 
@@ -97,18 +103,355 @@ zeroState:
 			JMP		stateMachine					;Verificar estados nuevamente
 
 firstState:
-			;CALL	#SubName						;Llamar la subrutina que maneja el estado
+			CALL	#NumSelect						;Comenzar la selección de números
+			JMP		stateMachine					;Verificar estados nuevamente
+
+secondState:
+			CALL	#ReadyCheck						;Verificar si comenzammos el conteo
+			JMP		stateMachine					;Verificar estados nuevamente
+
+thirdState:
+			CALL	#CounterSub						;Comenzar el conteo
 			JMP		stateMachine					;Verificar estados nuevamente
 
 	        JMP		$
 			nop
 
 ;-------------------------------------------------------------------------------
+;CounterSub
+;Objetivo: Verificar si se oprimió S2 e incrementar el estado a 3
+;Precondiciones: Debemos estar en el estado 2 (R15 debe contener #2)
+;Postcondiciones: Cambiaremos al estado 3
+;Autor: Alex Demel
+;Fecha: 11/7/2023
+;-------------------------------------------------------------------------------
+CounterSub:
+
+strt:		CALL	#OneSecond						;Esperar 1s y continuar
+
+			CALL	#CheckEnd						;Verificar si el conteo terminó
+			CMP.B	#0,R15
+			JZ		timeEnd
+
+			CMP.B	#0,R14							;Verificar si secondLow es cero
+			JNZ		secLo							;De no ser el caso, manejar secLo
+			MOV.B	#10,R14							;De ser el caso, colocar 10 en secLo
+			CALL	#DecSecondLow					;E inmediatamente decrementar a 9
+			JMP		secHiChk						;Chequear si podemos decrementar secHi
+
+secLo:
+			CALL	#DecSecondLow					;Decrementar secondLow
+			JMP		strt							;Volver al comienzo
+
+secHiChk:	CMP.B	#0,R13							;Verificar si secondHigh es cero
+			JNZ		secHi							;De no ser el caso, manejar secHi
+			MOV.B	#6,R13							;De ser el caso, colocar 6 en secHi
+			CALL	#DecSecondHigh					;E inmediatamente decrementar a 5
+			JMP		minLoChk						;Chequear si podemos decrementar minLo
+
+secHi:		CALL	#DecSecondHigh
+			JMP		strt							;Volver al comienzo
+
+minLoChk:	CMP.B	#0,R12							;Verificar si minuteLow es cero
+			JNZ		minLo							;De no ser el caso, manejar minLo
+			MOV.B	#10,R12							;De ser el caso, colocar 10 en minLo
+			CALL	#DecMinuteLow					;E inmediatamente decrementar a 9
+			JMP		minHiChk						;Chequear si podemos decrementar minHi
+
+minLo:		CALL	#DecMinuteLow
+			JMP		strt							;Volver al comienzo
+
+minHiChk:	CMP.B	#0,R11							;Verificar si minuteHigh es cero
+			JNZ		minHi							;De no ser el caso, manejar minHi
+			JMP		strt							;De ser el caso, volver al comienzo
+
+minHi:		CALL	#DecMinuteHigh
+			JMP		strt							;Volver al comienzo
+
+timeEnd:
+			MOV.B   #0,s1Pressed					;Booleana es falsa
+			MOV.B   #0,s2Pressed					;Booleana es falsa
+			RET
+
+;-------------------------------------------------------------------------------
+;ReadyCheck
+;Objetivo: Verificar si se oprimió S2 e incrementar el estado a 3
+;Precondiciones: Debemos estar en el estado 2 (R15 debe contener #2)
+;Postcondiciones: Cambiaremos al estado 3
+;Autor: Alex Demel
+;Fecha: 11/7/2023
+;-------------------------------------------------------------------------------
+ReadyCheck:
+
+			BIS		#CPUOFF, SR						;Entrar a low power (despertará con S2)
+			MOV.B   #0,s2Pressed					;Booleana es falsa
+
+			MOV		#3,R15							;Establecer el estado 3
+			RET
+
+;-------------------------------------------------------------------------------
+;CheckEnd
+;Objetivo: Verificar si llegamos al final del conteo
+;Precondiciones: Los registros R11-14 deben estar definidos y contener MM:SS respectivamente
+;Postcondiciones: Se mostrará 00:00 en la pantalla hasta que se presione S1.
+;Si S1 es presionado, estableceremos el estado inicial 0 en R15
+;Autor: Alex Demel
+;Fecha: 11/7/2023
+;-------------------------------------------------------------------------------
+CheckEnd:
+			CMP		#0,R11							;Verificar si todos los registros son cero
+			JNZ		ignore							;De lo contrario ignorar
+			CMP		#0,R12
+			JNZ		ignore
+			CMP		#0,R13
+			JNZ		ignore
+			CMP		#0,R14
+			JNZ		ignore
+
+			CALL	#NumBase						;Dibujar 00:00 en la pantalla
+			MOV		#4,R15							;Establecer el estado 4
+
+			BIS		#CPUOFF, SR						;Entrar a low power (despertará con S1)
+			MOV.B   #0,s1Pressed					;Booleana es falsa
+
+			MOV		#0,R15							;Establecer el estado 0
+
+ignore:
+			RET
+
+;-------------------------------------------------------------------------------
+;DecMinuteHigh
+;Objetivo: Decrementar minuteHigh por 1
+;Precondiciones: El registro R11 debe contener el número correspondiente a minuteHigh
+;Postcondiciones: R11 será decrementado por 1 y la pantalla reflejará el cambio
+;Autor: Alex Demel
+;Fecha: 11/7/2023
+;-------------------------------------------------------------------------------
+DecMinuteHigh:
+
+			MOV.B   #3,R4							;Guardar la pocisión de minuteHigh
+			DEC.B	R11								;Decrementar R13 (minuteHigh)
+			MOV.W	R11,R5							;Guardar el valor decrementado en R5
+			CALL	#DrawNum						;Dibujar en la posición de minuteHigh
+			RET
+
+;-------------------------------------------------------------------------------
+;DecMinuteLow
+;Objetivo: Decrementar minuteLow por 1
+;Precondiciones: El registro R12 debe contener el número correspondiente a minuteLow
+;Postcondiciones: R12 será decrementado por 1 y la pantalla reflejará el cambio
+;Autor: Alex Demel
+;Fecha: 11/7/2023
+;-------------------------------------------------------------------------------
+DecMinuteLow:
+
+			MOV.B   #18,R4							;Guardar la pocisión de minuteLow
+			DEC.B	R12								;Decrementar R13 (minuteLow)
+			MOV.W	R12,R5							;Guardar el valor decrementado en R5
+			CALL	#DrawNum						;Dibujar en la posición de minuteLow
+			RET
+
+;-------------------------------------------------------------------------------
+;DecSecondHigh
+;Objetivo: Decrementar secondHigh por 1
+;Precondiciones: El registro R13 debe contener el número correspondiente a secondHigh
+;Postcondiciones: R13 será decrementado por 1 y la pantalla reflejará el cambio
+;Autor: Alex Demel
+;Fecha: 11/7/2023
+;-------------------------------------------------------------------------------
+DecSecondHigh:
+
+			MOV.B   #14,R4							;Guardar la pocisión de secondHigh
+			DEC.B	R13								;Decrementar R13 (secondHigh)
+			MOV.W	R13,R5							;Guardar el valor decrementado en R5
+			CALL	#DrawNum						;Dibujar en la posición de secondHigh
+			BIS.B   #0x04,&0x0A33					;Dibujar ':'
+			RET
+
+;-------------------------------------------------------------------------------
+;DecSecondLow
+;Objetivo: Decrementar secondLow por 1
+;Precondiciones: El registro R14 debe contener el número correspondiente a secondLow
+;Postcondiciones: R14 será decrementado por 1 y la pantalla reflejará el cambio
+;Autor: Alex Demel
+;Fecha: 11/7/2023
+;-------------------------------------------------------------------------------
+DecSecondLow:
+
+			MOV.B   #7,R4							;Guardar la pocisión de secondLow
+			DEC.B	R14								;Decrementar R14 (secondLow)
+			MOV.W	R14,R5							;Guardar el valor decrementado en R5
+			CALL	#DrawNum						;Dibujar en la posición de secondLow
+			RET
+
+;-------------------------------------------------------------------------------
+;NumSelect
+;Objetivo: Permitir al usuario seleccionar / incrementar los números en la pantalla
+;desde izquierda a derecha usando S1 y S2 respectivamente
+;Precondiciones: Debemos estar en el estado 1 (R15 debe contener #1)
+;Postcondiciones: El usuario podrá editar los números
+;Autor: Alex Demel
+;Fecha: 11/7/2023
+;-------------------------------------------------------------------------------
+NumSelect:
+
+			PUSH	R4								;Guardar el contenido de R4
+			PUSH	R5								;Guardar el contenido de R5
+			PUSH	R6								;Guardar el contenido de R6
+			PUSH	R7								;Guardar el contenido de R7
+
+			CALL	#NumBase						;Dibujar 00:00 en la pantalla
+
+			MOV.B	#4,R6							;Usar R6 como índice
+			MOV.B	#0,R7							;Usar R7 como counter
+
+			MOV.W	#0,R7							;Mover cero a R7 (comenzar en cero)
+			MOV.W	#0,R5							;Mover cero a R5 (comenzar en cero)
+
+nextNum:
+			MOV.W	#12500,R4						;Establecer los ciclos a esperar
+			CALL	#Delay
+
+			MOV.B   pos(R6),R4						;Guardar la pocisión del número en R4
+			MOV.W	#10,R5							;Darle clear al número (Blinking)
+			CALL	#DrawNum						;Dibujar en la posición dada por R4
+
+			BIS.B   #0x04,&0x0A33					;Dibujar ':'
+
+			MOV.W	#12500,R4						;Establecer los ciclos a esperar
+			CALL	#Delay
+
+			MOV.B   pos(R6),R4						;Guardar la pocisión del número en R4
+			MOV.W	R7,R5							;Mover el número a R5
+			CALL	#DrawNum						;Dibujar en la posición dada por R4
+
+			BIS.B   #0x04,&0x0A33					;Dibujar ':'
+
+			CMP		#1,s1Pressed					;Verificar si se oprimió s1
+	        JNZ		noInc							;Si no se oprimió continuar
+	        INC		R7								;Si se oprimió incrementa el counter
+	        MOV.B   #0,s1Pressed					;Booleana es falsa
+
+	        CALL	#CheckNum						;Verificar si el número es válido
+noInc:
+			CMP		#1,s2Pressed					;Verificar si se oprimió s2
+	        JNZ		noInc2							;Si no se oprimió continuar
+			INCD.B	R6								;Si se oprimió incrementa el índice
+			CALL	#StoreNum						;Graba el número que dibujamos
+			MOV.W	#0,R7							;Mover cero a R7 (comenzar en cero)
+			MOV.W	#0,R5							;Mover cero a R5 (comenzar en cero)
+			MOV.B   #0,s2Pressed					;Booleana es falsa
+noInc2:
+			CMP		#12,R6							;Verificar si llegamos a la última posición
+			JNZ		nextNum							;Si no es el caso, continuar
+
+			MOV		#2,R15							;Establecer el estado 2
+
+			POP		R7								;Recuperar el contenido de R7
+			POP		R6								;Recuperar el contenido de R6
+			POP		R5								;Recuperar el contenido de R5
+			POP		R4								;Recuperar el contenido de R4
+
+			RET
+
+;-------------------------------------------------------------------------------
+;StoreNum
+;Objetivo: Guardar el número seleccionado por NumSelect en el registro correspondiente
+;Precondiciones: La posición del número debe estar dada por R4 y el número debe estar dado en R7
+;Postcondiciones: El número de R7 será grabado en el registro correspondiente
+;R11:minuteHigh,  R12:minuteLow,  R13:secondHigh,  R14:secondLow
+;Autor: Alex Demel
+;Fecha: 11/7/2023
+;-------------------------------------------------------------------------------
+StoreNum:
+			CMP		#3,R4							;Verificar si estamos en la posición minuteHigh
+			JNZ		chk2							;Si no es el caso, chequear próxima posición
+			MOV		R7,R11							;Guardar el número en minuteHigh y terminar
+			JMP		finish
+
+chk2:		CMP		#18,R4							;Verificar si estamos en la posición minuteLow
+			JNZ		chk3							;Si no es el caso, chequear próxima posición
+			MOV		R7,R12							;Guardar el número en minuteLow y terminar
+			JMP		finish
+
+chk3:		CMP		#14,R4							;Verificar si estamos en la posición secondHigh
+			JNZ		chk4							;Si no es el caso, chequear próxima posición
+			MOV		R7,R13							;Guardar el número en secondHigh y terminar
+			JMP		finish
+
+chk4:		CMP		#7,R4							;Verificar si estamos en la posición secondLow
+			JNZ		finish							;Si no es el caso, terminar
+			MOV		R7,R14							;Guardar el número en secondLow y terminar
+
+finish:
+			RET
+
+;-------------------------------------------------------------------------------
+;CheckNum
+;Objetivo: Verificar si el número dado por R7 es mayor que 5 y decrementar a 0 si R4 es 12 o 3.
+;Adicionalmente, si el número es mayor que 9, también decrementar a 0.
+;Precondiciones: R7 debe contener un número del 0-9 y R4 debe contener una posición
+;Postcondiciones: R7 será igualado a 0 si se cumplen las condiciones. De lo contrario permanece igual
+;Autor: Alex Demel
+;Fecha: 11/7/2023
+;-------------------------------------------------------------------------------
+CheckNum:
+			CMP		#10,R7							;Verificar si R7 > 9
+			JLO		cmpr							;Si es menor o igual chequear posición
+
+			MOV		#0,R7							;Si R7 > 9, cambiar a 0
+			JMP		skip							;Brincar luego del cambio a 0
+
+cmpr:		CMP		#14,R4							;Verificar la posición 12
+			JZ		cmpr2							;Si es el caso, verificar si R7 > 5
+
+			CMP		#3,R4							;Verificar la posición 3
+			JNZ		skip							;Si no es el caso, brincar
+
+cmpr2:		CMP		#6,R7							;Verificar si R7 > 5
+			JLO		skip							;Si no es el caso, brincar
+			MOV		#0,R7							;Si R7 > 5, cambiar a 0
+
+skip:
+			RET
+
+;-------------------------------------------------------------------------------
+;NumBase
+;Objetivo: Mostrar 00:00 en la pantalla
+;Precondiciones: Los arreglos numH y numL deben estar definidos
+;Postcondiciones: La pantalla mostrará 00:00
+;Autor: Alex Demel
+;Fecha: 11/7/2023
+;-------------------------------------------------------------------------------
+NumBase:
+			PUSH	R4								;Guardar el contenido de R4
+			PUSH	R5								;Guardar el contenido de R5
+			PUSH	R6								;Guardar el contenido de R6
+
+			MOV.B	#4,R6							;Usar R6 como índice
+
+nextNum2:	MOV.B   pos(R6),R4						;Guardar la pocisión del caracter en R4
+			MOV.W	#0,R5							;El número a dibujar es cero
+			CALL	#DrawNum						;Dibujar el cero en la posición dada por R4
+			INCD.B	R6								;Incrementar el índice
+
+			CMP		#14,R6							;Verificar si llegamos a la última posición
+			JNZ		nextNum2						;Si no es el caso, continuar
+
+			BIS.B   #0x04,&0x0A33					;Dibujar ':'
+
+			POP		R4								;Guardar el contenido de R4
+			POP		R5								;Guardar el contenido de R5
+			POP		R6								;Guardar el contenido de R6
+
+			RET
+
+;-------------------------------------------------------------------------------
 ;StartSub
 ;Objetivo: Mostrar el número del equipo seguido por los miembros
 ;al oprimir S1. Cambiarán los miembros mostrados con cada uso del botón
 ;Precondiciones: La dirección del arreglo conteniendo los addresses de
-;los miembros debe estar dado en el registro R8
+;los miembros debe estar dado en el registro R4
 ;Postcondiciones: La pantalla mostrará el número del equipo seguido por los miembros
 ;Autor: Alex Demel
 ;Fecha: 11/6/2023
@@ -121,7 +464,7 @@ restart:	MOV.W	R4,R5							;Usar R5 como índice
 
 next:		MOV.W	@R5+,R8							;Mover la dirección del primer integrante a R8
 			CALL	#ScrollStr
-			CMP		#1,R14
+			CMP		#1,R15
 			JEQ		end
 			CMP		#-1,0(R5)						;Verificar si seguimos en el arreglo
 			JEQ		restart
@@ -150,15 +493,15 @@ ScrollStr:
 restart2:	MOV.B   #0,R6							;Usar R6 como índice de comienzo
 			MOV.B   #0,R9							;Usar R9 como contador
 
-			MOV.B   #0,R14							;Establecer estado cero
+			MOV.B   #0,R15							;Establecer estado cero
 
 			CMP		#team,R8						;Verificar si estamos mostrando el número de equipo
 			JNZ		first							;Si no lo estamos mostrando, ve al comienzo
-			MOV.B   #1,R14							;Si lo estamos mostrando, establece el estado 1
+			MOV.B   #1,R15							;Si lo estamos mostrando, establece el estado 1
 
 first:		MOV.B   R6,R7							;Guardar R6 (ídice de comienzo) en R7 (índice general)
 
-			MOV.W	#31250,R4						;Establecer los ciclos a esperar
+			MOV.W	#15625,R4						;Establecer los ciclos a esperar
 			CALL	#Delay							;Antes de volver a dibujar en la pantalla
 
 next2:		MOV.B   pos(R9),R4						;Guardar la pocisión del caracter en R4
@@ -183,13 +526,13 @@ next2:		MOV.B   pos(R9),R4						;Guardar la pocisión del caracter en R4
 	        CMP		#1,s2Pressed					;Verificar si se oprimió s2
 	        JEQ		s2Stop							;Parar la subrutina
 
-			MOV.W	#31250,R4						;Establecer los ciclos a esperar
+			MOV.W	#15625,R4						;Establecer los ciclos a esperar
 			CALL	#Delay							;Luego de dibujar en la pantalla
 
 			JMP		first							;Si el botón no se ha presionado, regresa al inicio
 
 s1Stop:		MOV.B	#0,s1Pressed					;Booleana es falsa
-			MOV.B   #0,R14							;Establecer estado cero
+			MOV.B   #0,R15							;Establecer estado cero
 			JMP		stop
 
 s2Stop:		MOV.B	#0,s2Pressed					;Booleana es falsa
@@ -238,6 +581,23 @@ DrawNum:
   			MOV.B   numL(R5),0x0a20+1(R4)		;dibujar en la posición dada por
   												;R4+0x0a20 y R4+0x0a20+1
   			RET
+
+;-------------------------------------------------------------------------------
+;OneSecond
+;Objetivo: Esperar 1 segundo y continuar la ejecución del programa
+;Precondiciones: El timer debe estar inicializado
+;Postcondiciones: El programa esperará 1 segundo y continuará
+;Autor: Alex Demel
+;Fecha: 11/7/2023
+;-------------------------------------------------------------------------------
+OneSecond:
+			BIS    	#BIT4,TA0CTL			;Empezar el timer
+			MOV     #62500,TA0CCR0       	;Esperar 0.5s
+			BIS		#CPUOFF, SR				;Entrar a low power
+			BIS    	#BIT4,TA0CTL			;Empezar el timer
+			MOV     #62500,TA0CCR0       	;Esperar 0.5s
+			BIS		#CPUOFF, SR				;Entrar a low power
+			RET
 
 ;-------------------------------------------------------------------------------
 ;Delay
@@ -321,11 +681,11 @@ UnlockGPIO:
 
     		;Cambiar fuente de reloj a SMLCK = 1 MHz  (#TASSEL_2)
 			;Cambiar modo a 'Stop'  (MC_0)
-			;Establecer divisor de input 4 (ID_2)
+			;Establecer divisor de input 8 (ID_3)
 
 			MOV		#CCIE, &TA0CCTL0        ;Habilitar interrupción TACCR0
 
-	        MOV     #TASSEL_2+MC_0+ID_2, &TA0CTL
+	        MOV     #TASSEL_2+MC_0+ID_3, &TA0CTL
 
 		    NOP
 
@@ -348,11 +708,20 @@ PORT1_ISR:
 
 s1Press:
 			MOV.B	#1,s1Pressed			;Booleana es cierta
+			CMP		#4,R15					;Verificar si estamos en el estado 4
+			JNZ		end2					;Si no es el caso, terminar
+			BIC		#0x10, 0(SP)			;Si es el caso, salir de low power
+
 			JMP 	end2
 s2Press:
-			CMP		#0,R14					;Verificar si estamos en el estado 0
+			CMP		#0,R15					;Verificar si estamos en el estado 0
 			JEQ		end2					;Si estamos en el estado 0, terminar
 			MOV.B	#1,s2Pressed			;De lo contario, poner booleana cierta
+
+			CMP		#2,R15					;Verificar si estamos en el estado 2
+			JNZ		end2					;Si no es el caso, terminar
+			BIC		#0x10, 0(SP)			;Si es el caso, salir de low power
+
 			JMP 	end2
 end2:
 			BIC 	#00000010b, &P1IFG		;Borrar flag de P1.1
