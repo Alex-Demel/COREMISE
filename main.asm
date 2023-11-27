@@ -814,6 +814,7 @@ endTimerSub:
 
 ;-------------------------------------------------------------------------------
 PORT1_ISR:
+			PUSH	R4
 			CMP		#1,debounce
 			JZ		endPortSub
 
@@ -831,11 +832,12 @@ s1Press:
 			MOV.B   #0,R7					;Reiniciar índice general
 			MOV.B   #0,R9					;Reiniciar contador
 
+			CALL	#DebounceSub
+
 			CMP		#-1,0(R8)				;Verificar si seguimos en el arreglo
 			JNZ		endPortSub				;Si seguimos en el arreglo terminar
 			MOV		#members,R8				;Si no es el caso, reiniciar el index del arreglo
 
-			CALL	#DebounceSub
 			JMP		endPortSub				;Terminar
 
 check1S1:
@@ -844,8 +846,6 @@ check1S1:
 			INC		R7						;Si es el caso, incrementar el counter
 
 			CALL	#DebounceSub
-			MOV		#31250,R4				;Esperar antes de continuar
-			CALL	#Delay
 
 			JMP		endPortSub				;Terminar
 
@@ -872,23 +872,24 @@ check4S1:
 			JMP 	endPortSub				;Terminar
 
 check5S1:
+			CALL	#DebounceSub
 			CMP		#5,R15					;Verificar si estamos en el estado 5
 			JNZ		endPortSub				;Si no es el caso, terminar
 
 			MOV.W	#0,R15					;Regresar al estado 0
 
-			CALL	#DebounceSub
 			JMP		endPortSub				;Terminar
 
 s2Press:
 			CMP		#0,R15					;Verificar si estamos en el estado 0
 			JNZ		check1S2				;Si no es el caso, verificar el proximo estado
 
+			CALL	#DebounceSub
+
 			CMP		#team,0(R8)				;Verificar si estamos mostrando el número de equipo
 			JNZ		endPortSub				;Si no lo estamos mostrando, terminar
 			INC   	R15						;Si lo estamos mostrando, establece el estado 1
 
-			CALL	#DebounceSub
 			JMP 	endPortSub				;Terminar
 
 check1S2:
@@ -902,14 +903,12 @@ check1S2:
 			MOV.W	#0,R7					;Mover cero a R7 (comenzar en cero)
 			MOV.W	#0,R5					;Mover cero a R5 (comenzar en cero)
 
+			CALL	#DebounceSub
+
 			CMP		#12,R6					;Verificar si llegamos a la última posición
 			JNZ		endPortSub				;Si no es el caso, terminar
 			MOV		#2,R15					;Si es el caso, establecer el estado 2
 			BIC		#0x10,0(SP)				;Salir de low power
-
-			CALL	#DebounceSub
-			MOV		#31250,R4				;Esperar antes de continuar
-			CALL	#Delay
 
 			JMP		endPortSub				;Terminar
 
@@ -933,18 +932,19 @@ check3S2:
 			JMP		endPortSub				;Terminar
 
 check4S2:
+			CALL	#DebounceSub
 			CMP		#4,R15					;Verificar si estamos en el estado 4
 			JNZ		endPortSub				;Si no es el caso, terminar
 
 			MOV.W	#3,R15					;Regresar al estado 3
 			BIC		#0x10,0(SP)				;Salir de low power
 
-			CALL	#DebounceSub
 			JMP		endPortSub				;Terminar
 
 endPortSub:
 			BIC 	#00000010b, &P1IFG		;Borrar flag de P1.1
 			BIC	    #00000100b, &P1IFG		;Borrar flag de P1.2
+			POP		R4
 
             RETI
 
