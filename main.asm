@@ -699,9 +699,9 @@ Delay:
 
 ;-------------------------------------------------------------------------------
 ;DebounceSub
-;Objetivo: Esperar 0.15s y actualizar la variable debounce
+;Objetivo: Esperar 0.1s y actualizar la variable debounce
 ;Precondiciones: El timer debe estar inicializado
-;Postcondiciones: El programa esperará 0.15s y actualizará la variable debounce
+;Postcondiciones: El programa esperará 0.1s y actualizará la variable debounce
 ;Autor: Alex Demel
 ;Fecha: 11/4/2023
 ;-------------------------------------------------------------------------------
@@ -711,7 +711,7 @@ DebounceSub:
 			MOV		TA0CCR0,timeCycles				;Guardar ciclos anteriores
 
 			MOV     #TASSEL_2+MC_1+ID_3, &TA0CTL	;Establecer frecuencia base
-			MOV     #18750, &TA0CCR0				;Esperar 0.15s
+			MOV     #12500, &TA0CCR0				;Esperar 0.1s
 			RET
 
 ;-------------------------------------------------------------------------------
@@ -844,6 +844,9 @@ check1S1:
 			INC		R7						;Si es el caso, incrementar el counter
 
 			CALL	#DebounceSub
+			MOV		#31250,R4				;Esperar antes de continuar
+			CALL	#Delay
+
 			JMP		endPortSub				;Terminar
 
 check2S1:
@@ -905,6 +908,9 @@ check1S2:
 			BIC		#0x10,0(SP)				;Salir de low power
 
 			CALL	#DebounceSub
+			MOV		#31250,R4				;Esperar antes de continuar
+			CALL	#Delay
+
 			JMP		endPortSub				;Terminar
 
 check2S2:
