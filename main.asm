@@ -74,13 +74,13 @@ StopWDT     mov.w   #WDTPW|WDTHOLD,&WDTCTL  ; Parar watchdog timer
 
 			; Equipo 03
 			; Elvin Cruz
-			; % de contribución
+			; 25% de contribución
 			; Victor Cruz
-			; % de contribución
+			; 17.5% de contribución
 			; Alex Demel
-			; % de contribución
+			; 40% de contribución
 			; Braian Diaz
-			; % de contribución
+			; 17.5% de contribución
 
 			;Inicializar la aplicación
 			CALL	#Setup
